@@ -11,7 +11,7 @@
         <div class="container">
             <h1>Maze Game Backend Plan</h1>
             <p>Step-by-step guide to implementing the backend for a maze game using Node.js and MySQL.</p>
-            <button id="theme-toggle" class="theme-toggle">🌙</button>
+            <button id="theme-toggle" class="theme-toggle">🌙 Dark Mode</button>
         </div>
     </header>
 
@@ -19,8 +19,8 @@
         <section>
             <h2>Database Setup</h2>
             <p>Use the following SQL schema to create the necessary tables:</p>
-            <pre>
-<code>CREATE TABLE users (
+            <pre><code class="language-sql">
+CREATE TABLE users (
     id INT AUTO_INCREMENT PRIMARY KEY,
     first_name VARCHAR(100),
     last_name VARCHAR(100),
@@ -35,62 +35,14 @@ CREATE TABLE password_resets (
     email VARCHAR(150),
     reset_code VARCHAR(6),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);</code>
-            </pre>
+);
+            </code></pre>
         </section>
 
         <section>
-            <h2>Workflow</h2>
-            <h3>Signup Flow</h3>
-            <ol>
-                <li>User fills in the signup form (First Name, Last Name, Email, Password).</li>
-                <li>Click "Send Verification Code":
-                    <ul>
-                        <li>Backend generates a 6-digit code.</li>
-                        <li>Saves user data to the database.</li>
-                        <li>Sends code to user's email.</li>
-                    </ul>
-                </li>
-                <li>User enters verification code and clicks "Signup":
-                    <ul>
-                        <li>Code is verified against the database.</li>
-                        <li>Password is hashed, and `is_verified` is updated.</li>
-                        <li>User is redirected to the login page.</li>
-                    </ul>
-                </li>
-            </ol>
-
-            <h3>Login Flow</h3>
-            <ol>
-                <li>User inputs email and password.</li>
-                <li>Backend verifies credentials and `is_verified` status.</li>
-                <li>On success, redirects user to the maze game.</li>
-            </ol>
-
-            <h3>Forgot Password Flow</h3>
-            <ol>
-                <li>User clicks "Forgot Password?" and enters email.</li>
-                <li>Backend generates a reset code and emails it.</li>
-                <li>User clicks the reset link, fills in the new password, and saves:
-                    <ul>
-                        <li>Password is updated in the database.</li>
-                        <li>Redirects user to the login page.</li>
-                    </ul>
-                </li>
-            </ol>
-        </section>
-
-        <section>
-            <h2>Implementation Plan</h2>
-            <p>Follow these steps to build the backend:</p>
-            <ol>
-                <li>Initialize the project with <code>npm init</code>.</li>
-                <li>Install required dependencies:
-                    <pre><code>npm install express mysql bcrypt nodemailer body-parser cors</code></pre>
-                </li>
-                <li>Set up the following file structure:
-                    <pre>
-<code>maze-backend/
+            <h2>Folder Structure</h2>
+            <pre><code class="language-text">
+maze-backend/
 ├── index.js
 ├── routes/
 │   └── auth.js
@@ -98,12 +50,159 @@ CREATE TABLE password_resets (
 │   └── connection.js
 ├── utils/
 │   ├── mailer.js
-│   ├── generateCode.js</code>
-                    </pre>
-                </li>
-                <li>Implement routes and utilities as described in the backend plan.</li>
-                <li>Run the server with <code>node index.js</code>.</li>
-            </ol>
+│   ├── generateCode.js
+├── package.json
+            </code></pre>
+        </section>
+
+        <section>
+            <h2>Code Implementation</h2>
+
+            <h3>1. index.js (Main Entry Point)</h3>
+            <pre><code class="language-javascript">
+const express = require("express");
+const bodyParser = require("body-parser");
+const cors = require("cors");
+const authRoutes = require("./routes/auth");
+
+const app = express();
+
+// Middleware
+app.use(cors());
+app.use(bodyParser.json());
+app.use("/auth", authRoutes);
+
+// Server
+const PORT = 3000;
+app.listen(PORT, () => {
+    console.log(\`Server is running on http://localhost:\${PORT}\`);
+});
+            </code></pre>
+
+            <h3>2. routes/auth.js (Authentication Routes)</h3>
+            <pre><code class="language-javascript">
+const express = require("express");
+const bcrypt = require("bcrypt");
+const connection = require("../db/connection");
+const { sendMail } = require("../utils/mailer");
+const { generateCode } = require("../utils/generateCode");
+
+const router = express.Router();
+
+// Send Verification Code for Signup
+router.post("/send-code", async (req, res) => {
+    const { firstName, lastName, email, password } = req.body;
+    const verificationCode = generateCode(6);
+
+    // Check if user already exists
+    const checkQuery = \`SELECT email FROM users WHERE email = ?\`;
+    connection.query(checkQuery, [email], (err, results) => {
+        if (results.length > 0) return res.status(400).send("User already exists.");
+
+        // Save user data with verification code
+        const insertQuery = \`INSERT INTO users (first_name, last_name, email, password, verification_code) VALUES (?, ?, ?, ?, ?)\`;
+        connection.query(
+            insertQuery,
+            [firstName, lastName, email, password, verificationCode],
+            async (err) => {
+                if (err) return res.status(500).send("Error saving user data.");
+                await sendMail(email, \`Your verification code: \${verificationCode}\`);
+                res.send("Verification code sent!");
+            }
+        );
+    });
+});
+
+// Verify Signup Code and Save User
+router.post("/signup", async (req, res) => {
+    const { email, verificationCode, password } = req.body;
+
+    const query = \`SELECT verification_code FROM users WHERE email = ?\`;
+    connection.query(query, [email], async (err, results) => {
+        if (err || results.length === 0) return res.status(400).send("Invalid email.");
+        if (results[0].verification_code !== verificationCode) return res.status(400).send("Invalid code.");
+
+        const hashedPassword = await bcrypt.hash(password, 10);
+        const updateQuery = \`UPDATE users SET password = ?, is_verified = true WHERE email = ?\`;
+        connection.query(updateQuery, [hashedPassword, email], (err) => {
+            if (err) return res.status(500).send("Error finalizing signup.");
+            res.send("Signup successful!");
+        });
+    });
+});
+
+// Login
+router.post("/login", (req, res) => {
+    const { email, password } = req.body;
+
+    const query = \`SELECT password, is_verified FROM users WHERE email = ?\`;
+    connection.query(query, [email], async (err, results) => {
+        if (err || results.length === 0) return res.status(400).send("Invalid email.");
+        if (!results[0].is_verified) return res.status(400).send("User not verified.");
+        
+        const validPassword = await bcrypt.compare(password, results[0].password);
+        if (!validPassword) return res.status(400).send("Incorrect password.");
+
+        res.send("Login successful!");
+    });
+});
+
+module.exports = router;
+            </code></pre>
+
+            <h3>3. db/connection.js</h3>
+            <pre><code class="language-javascript">
+const mysql = require("mysql");
+
+const connection = mysql.createConnection({
+    host: "localhost",
+    user: "root",
+    password: "",
+    database: "maze",
+});
+
+connection.connect((err) => {
+    if (err) throw err;
+    console.log("Connected to MySQL database!");
+});
+
+module.exports = connection;
+            </code></pre>
+
+            <h3>4. utils/mailer.js</h3>
+            <pre><code class="language-javascript">
+const nodemailer = require("nodemailer");
+
+const transporter = nodemailer.createTransport({
+    service: "gmail",
+    auth: {
+        user: "your-email@gmail.com",
+        pass: "your-email-password",
+    },
+});
+
+const sendMail = (email, message) => {
+    const mailOptions = {
+        from: "your-email@gmail.com",
+        to: email,
+        subject: "Verification Code",
+        text: message,
+    };
+
+    return transporter.sendMail(mailOptions);
+};
+
+module.exports = { sendMail };
+            </code></pre>
+
+            <h3>5. utils/generateCode.js</h3>
+            <pre><code class="language-javascript">
+const generateCode = (length) => {
+    return Math.random().toString(36).substr(2, length).toUpperCase();
+};
+
+module.exports = { generateCode };
+            </code></pre>
         </section>
     </main>
 
@@ -113,6 +212,8 @@ CREATE TABLE password_resets (
         </div>
     </footer>
 
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.css" />
     <script src="script.js"></script>
 </body>
 </html>
