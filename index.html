@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Maze Backend Plan</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <header>
+        <div class="container">
+            <h1>Maze Game Backend Plan</h1>
+            <p>Step-by-step guide to implementing the backend for a maze game using Node.js and MySQL.</p>
+            <button id="theme-toggle" class="theme-toggle">🌙</button>
+        </div>
+    </header>
+
+    <main class="container">
+        <section>
+            <h2>Database Setup</h2>
+            <p>Use the following SQL schema to create the necessary tables:</p>
+            <pre>
+<code>CREATE TABLE users (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    first_name VARCHAR(100),
+    last_name VARCHAR(100),
+    email VARCHAR(150) UNIQUE,
+    password VARCHAR(255),
+    verification_code VARCHAR(6),
+    is_verified BOOLEAN DEFAULT FALSE
+);
+
+CREATE TABLE password_resets (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    email VARCHAR(150),
+    reset_code VARCHAR(6),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);</code>
+            </pre>
+        </section>
+
+        <section>
+            <h2>Workflow</h2>
+            <h3>Signup Flow</h3>
+            <ol>
+                <li>User fills in the signup form (First Name, Last Name, Email, Password).</li>
+                <li>Click "Send Verification Code":
+                    <ul>
+                        <li>Backend generates a 6-digit code.</li>
+                        <li>Saves user data to the database.</li>
+                        <li>Sends code to user's email.</li>
+                    </ul>
+                </li>
+                <li>User enters verification code and clicks "Signup":
+                    <ul>
+                        <li>Code is verified against the database.</li>
+                        <li>Password is hashed, and `is_verified` is updated.</li>
+                        <li>User is redirected to the login page.</li>
+                    </ul>
+                </li>
+            </ol>
+
+            <h3>Login Flow</h3>
+            <ol>
+                <li>User inputs email and password.</li>
+                <li>Backend verifies credentials and `is_verified` status.</li>
+                <li>On success, redirects user to the maze game.</li>
+            </ol>
+
+            <h3>Forgot Password Flow</h3>
+            <ol>
+                <li>User clicks "Forgot Password?" and enters email.</li>
+                <li>Backend generates a reset code and emails it.</li>
+                <li>User clicks the reset link, fills in the new password, and saves:
+                    <ul>
+                        <li>Password is updated in the database.</li>
+                        <li>Redirects user to the login page.</li>
+                    </ul>
+                </li>
+            </ol>
+        </section>
+
+        <section>
+            <h2>Implementation Plan</h2>
+            <p>Follow these steps to build the backend:</p>
+            <ol>
+                <li>Initialize the project with <code>npm init</code>.</li>
+                <li>Install required dependencies:
+                    <pre><code>npm install express mysql bcrypt nodemailer body-parser cors</code></pre>
+                </li>
+                <li>Set up the following file structure:
+                    <pre>
+<code>maze-backend/
+├── index.js
+├── routes/
+│   └── auth.js
+├── db/
+│   └── connection.js
+├── utils/
+│   ├── mailer.js
+│   ├── generateCode.js</code>
+                    </pre>
+                </li>
+                <li>Implement routes and utilities as described in the backend plan.</li>
+                <li>Run the server with <code>node index.js</code>.</li>
+            </ol>
+        </section>
+    </main>
+
+    <footer>
+        <div class="container">
+            <p>&copy; 2024 Maze Game Development Team</p>
+        </div>
+    </footer>
+
+    <script src="script.js"></script>
+</body>
+</html>
